@@ -62,6 +62,8 @@ COMMANDS = {
     "reports": "report",
     "game": "game",
     "/fixgame": "game",
+    r"\fixgit": "gitpilot",
+    "fixgit": "gitpilot",
 }
 
 # Matches Windows absolute paths (quoted or unquoted, no embedded spaces)
@@ -405,6 +407,98 @@ def _launch_game() -> None:
         _curses.wrapper(run_game)
     except Exception as exc:
         print_err(f"Game error: {exc}")
+        return
+
+    console.print()
+    print_ok("Back in Fixbot.")
+    console.print()
+
+
+def _launch_gitpilot() -> None:
+    """GitPilot boot screen → launch GitPilot AI Git assistant."""
+    import time as _time
+
+    theme_col = get_theme_color()
+    _ANSI = {
+        "yellow": "\033[93m", "magenta": "\033[95m", "cyan": "\033[96m",
+    }
+    col   = _ANSI.get(theme_col, "\033[96m")
+    reset = "\033[0m"
+    bold  = "\033[1m"
+    dim   = "\033[2m"
+    green = "\033[92m"
+    white = "\033[97m"
+
+    title_lines = [
+        r"  ██████╗ ██╗████████╗██████╗ ██╗██╗      ██████╗ ████████╗",
+        r" ██╔════╝ ██║╚══██╔══╝██╔══██╗██║██║     ██╔═══██╗╚══██╔══╝",
+        r" ██║  ███╗██║   ██║   ██████╔╝██║██║     ██║   ██║   ██║   ",
+        r" ██║   ██║██║   ██║   ██╔═══╝ ██║██║     ██║   ██║   ██║   ",
+        r" ╚██████╔╝██║   ██║   ██║     ██║███████╗╚██████╔╝   ██║   ",
+        r"  ╚═════╝ ╚═╝   ╚═╝   ╚═╝     ╚═╝╚══════╝ ╚═════╝    ╚═╝  ",
+    ]
+
+    sys.stdout.write("\n")
+    for line in title_lines:
+        sys.stdout.write(f"{bold}{col}{line}{reset}\n")
+        sys.stdout.flush()
+        _time.sleep(0.045)
+
+    sys.stdout.write(
+        f"\n  {col}G I T P I L O T   ·   A I - P o w e r e d   G i t   A s s i s t a n t{reset}\n\n"
+    )
+    sys.stdout.flush()
+    _time.sleep(0.3)
+
+    _BAR_W = 28
+    _STEPS = [
+        ("Initializing GitPilot",     0.40),
+        ("Loading AI engine",         0.50),
+        ("Connecting to Gemini",      0.45),
+        ("Scanning git environment",  0.35),
+        ("Ready to launch",           0.30),
+    ]
+
+    for label, dur in _STEPS:
+        for i in range(_BAR_W + 1):
+            filled = "█" * i
+            empty  = "░" * (_BAR_W - i)
+            pct    = int(100 * i / _BAR_W)
+            sys.stdout.write(
+                f"\r  {dim}{label:<26}{reset}  "
+                f"{col}[{filled}{empty}]{reset}  {white}{pct:3d}%{reset}"
+            )
+            sys.stdout.flush()
+            _time.sleep(dur / _BAR_W)
+
+        sys.stdout.write(
+            f"\r  {dim}{label:<26}{reset}  "
+            f"{green}[{'█' * _BAR_W}]{reset}  {green}[OK]{reset}\n"
+        )
+        sys.stdout.flush()
+
+    sys.stdout.write(
+        f"\n  {bold}{col}▶  LAUNCHING GITPILOT  —  AI-Powered Git Assistant{reset}\n\n"
+    )
+    sys.stdout.flush()
+    _time.sleep(0.7)
+
+    try:
+        import questionary  # noqa: F401 — verify dep is available
+    except ImportError:
+        console.print("  [dim]questionary not found — installing...[/dim]")
+        from display.animations import WgetBar
+        bar = WgetBar(label="questionary", color=theme_col)
+        rc, out = bar.run(["pip", "install", "questionary", "--quiet"])
+        if rc != 0:
+            print_err("Failed to install questionary. Run manually: pip install questionary")
+            return
+
+    try:
+        from gitpilot.main import main as gitpilot_main
+        gitpilot_main()
+    except Exception as exc:
+        print_err(f"GitPilot error: {exc}")
         return
 
     console.print()
@@ -770,6 +864,9 @@ def main() -> None:
                 continue
             if action == "game":
                 _launch_game()
+                continue
+            if action == "gitpilot":
+                _launch_gitpilot()
                 continue
 
         if user_input.lower().startswith("ticket "):

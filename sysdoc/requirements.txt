@@ -9,3 +9,4 @@ pywin32>=306
 winshell>=0.6
 gputil>=1.4.0
 send2trash>=1.8.0
+questionary>=2.0.0
