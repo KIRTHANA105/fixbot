@@ -216,6 +216,133 @@ def setup_api_key():
     return None
 
 
+def handle_conflicts(path: str, conflict_type: str = "rebase") -> bool:
+    """
+    Guides the user step-by-step to resolve conflicts.
+    conflict_type can be 'rebase' or 'merge'.
+    Returns True if resolved successfully, False if aborted or failed.
+    """
+    console.print()
+    console.print(Panel(
+        "[bold red]⚠️  Conflict Detected![/bold red]\n\n"
+        "Git tried to combine changes but found that the same lines were modified differently.\n"
+        "[bold white]Don't panic! This is completely normal and easy to fix.[/bold white]",
+        border_style="red",
+    ))
+
+    # Let's find conflicted files
+    # git diff --name-only --diff-filter=U
+    out, _, _ = git.run_git(["diff", "--name-only", "--diff-filter=U"], cwd=path)
+    conflicted_files = [f.strip() for f in out.splitlines() if f.strip()]
+    
+    if conflicted_files:
+        console.print("\n  [bold white]Conflicted Files:[/bold white]")
+        for f in conflicted_files:
+            console.print(f"  [red]• {f}[/red]")
+    else:
+        # Fallback to status check
+        console.print("\n  [yellow]Please check the files below for conflicts.[/yellow]")
+
+    teach_panel(
+        "Here is what you need to do:\n"
+        "1. Open the conflicted files in your editor.\n"
+        "2. Look for markers like <<<<<<<, =======, and >>>>>>>.\n"
+        "3. Edit the file to keep the changes you want, and delete all of those markers.\n"
+        "4. Save the files."
+    )
+
+    while True:
+        console.print("\n  [bold white]What would you like to do now?[/bold white]\n")
+        items = [
+            "I have edited and resolved all conflicts. Let's continue!",
+            "Show me which files still have conflict markers",
+            "Abort this action and go back to safety (no data will be lost)"
+        ]
+        choice = _sub_menu("Conflict Resolution Menu", items)
+        
+        if choice is None:
+            continue
+            
+        if choice == 0:
+            # Let's check if conflict markers still exist in the files
+            markers_found = []
+            for f in conflicted_files:
+                full_p = Path(path) / f
+                if full_p.exists():
+                    try:
+                        content = full_p.read_text(encoding="utf-8", errors="ignore")
+                        if "<<<<<<<" in content or "=======" in content or ">>>>>>>" in content:
+                            markers_found.append(f)
+                    except Exception:
+                        pass
+            
+            if markers_found:
+                err("We still found conflict markers in these files:")
+                for f in markers_found:
+                    console.print(f"  [red]• {f}[/red]")
+                console.print("  [dim]Please open them, remove all markers (<<<<<<<, =======, >>>>>>>), save, and try again.[/dim]")
+                continue
+                
+            # Stage all changes
+            console.print("  [dim]Staging resolved files (git add .)...[/dim]")
+            git.stage_all(path)
+            
+            # Continue the rebase or merge
+            if conflict_type == "rebase":
+                out, errmsg, code = spinner("Continuing rebase", git.run_git, ["rebase", "--continue"], cwd=path)
+                # If git rebase --continue succeeds or says "No changes"
+                if code == 0:
+                    ok("Conflicts resolved and rebase completed successfully!")
+                    return True
+                elif "no changes" in (out + errmsg).lower():
+                    # We can skip
+                    git.run_git(["rebase", "--skip"], cwd=path)
+                    ok("Conflicts skipped / completed!")
+                    return True
+                else:
+                    err(f"Rebase continue failed:\n{errmsg}")
+                    # If we still have conflicts, loop again
+                    if "conflict" in (out + errmsg).lower():
+                        continue
+                    return False
+            else: # merge
+                out, errmsg, code = spinner("Finishing merge", git.run_git, ["commit", "--no-edit"], cwd=path)
+                if code == 0:
+                    ok("Conflicts resolved and merge completed successfully!")
+                    return True
+                else:
+                    err(f"Merge commit failed:\n{errmsg}")
+                    return False
+                    
+        elif choice == 1:
+            # Show which files still have markers
+            markers_found = []
+            for f in conflicted_files:
+                full_p = Path(path) / f
+                if full_p.exists():
+                    try:
+                        content = full_p.read_text(encoding="utf-8", errors="ignore")
+                        if "<<<<<<<" in content:
+                            markers_found.append(f)
+                    except Exception:
+                        pass
+            if markers_found:
+                console.print("\n  [yellow]These files still have conflict markers:[/yellow]")
+                for f in markers_found:
+                    console.print(f"  [red]• {f}[/red]")
+            else:
+                ok("No conflict markers found! You're ready to continue.")
+                
+        elif choice == 2:
+            # Abort
+            if conflict_type == "rebase":
+                spinner("Aborting rebase", git.run_git, ["rebase", "--abort"], cwd=path)
+            else:
+                spinner("Aborting merge", git.run_git, ["merge", "--abort"], cwd=path)
+            warn("Action aborted. Returned your project back to its original state.")
+            return False
+
+
 # ══════════════════════════════════════════════════════════════════════════
 # FLOW 1 — SMART PUSH
 # ══════════════════════════════════════════════════════════════════════════
@@ -324,35 +451,187 @@ def flow_push():
         final_msg = commit_msg
     final_msg = final_msg or commit_msg
 
-    _, errmsg, code = spinner("Staging files (git add .)", git.stage_all, path)
+    out, errmsg, code = spinner("Staging files (git add .)", git.stage_all, path)
     if code != 0:
-        err(f"git add failed:\n{errmsg}")
+        combined_err = errmsg.strip() or out.strip() or f"Unknown Git add error (exit code: {code})"
+        err(f"git add failed:\n{combined_err}")
         return
 
     out, errmsg, code = spinner("Creating commit", git.commit, path, final_msg)
     if code != 0:
-        if "nothing to commit" in (out + errmsg):
+        if "nothing to commit" in (out + errmsg).lower():
             warn("Nothing new to commit — everything already saved.")
         else:
-            err(f"git commit failed:\n{errmsg}")
-            teach_panel(spinner("AI analyzing error", explain_error, errmsg))
+            combined_err = errmsg.strip() or out.strip() or f"Unknown Git commit error (exit code: {code})"
+            err(f"git commit failed:\n{combined_err}")
+            teach_panel(spinner("AI analyzing error", explain_error, combined_err))
             return
     else:
         ok("Commit created!")
 
+    # Check if detached HEAD
+    show_curr_out, _, _ = git.run_git(["branch", "--show-current"], cwd=path)
+    is_detached = not show_curr_out.strip()
+
     branch = git.get_branch(path)
+    
+    if is_detached:
+        warn("You are in a 'detached HEAD' state! This means you aren't currently on a branch.")
+        teach_panel("Git needs you to be on a named branch to easily track and push your progress.")
+        
+        console.print("  [bold white]Where would you like to push your changes?[/bold white]\n")
+        detached_options = [
+            "Push to 'main' branch",
+            "Create a new branch and push"
+        ]
+        choice = _sub_menu("Detached HEAD Options", detached_options)
+        
+        if choice is None:
+            warn("Operation cancelled.")
+            return
+            
+        if choice == 0:
+            # PUSH TO MAIN BRANCH
+            # Safely switch to main (or create it if missing), pull, merge current changes, push.
+            detached_sha, _, _ = git.run_git(["rev-parse", "HEAD"], cwd=path)
+            if not detached_sha:
+                err("Could not find the current commit SHA.")
+                return
+                
+            local_branches = git.get_local_branches(path)
+            target_main = "main" if "main" in local_branches else ("master" if "master" in local_branches else "main")
+            
+            # Create a temporary branch to safeguard changes
+            temp_branch = "temp-detached-changes"
+            # Delete if exists
+            git.run_git(["branch", "-D", temp_branch], cwd=path)
+            git.run_git(["branch", temp_branch], cwd=path)
+            
+            # Switch to main/master
+            console.print(f"  [dim]Switching to branch '{target_main}'...[/dim]")
+            out, errmsg, code = spinner(f"Switching to {target_main}", git.run_git, ["checkout", target_main], cwd=path)
+            if code != 0:
+                # If target_main does not exist, let's create it
+                console.print(f"  [dim]Branch '{target_main}' not found locally. Creating it...[/dim]")
+                out, errmsg, code = spinner(f"Creating branch {target_main}", git.run_git, ["checkout", "-b", target_main], cwd=path)
+                if code != 0:
+                    err(f"Failed to switch or create branch '{target_main}':\n{errmsg}")
+                    return
+            
+            # Now we are on target_main. Pull latest changes (safe push)
+            console.print(f"  [dim]Pulling latest changes on '{target_main}'...[/dim]")
+            pull_out, pull_err, pull_code = spinner(f"Syncing {target_main} with GitHub", git.pull_rebase, path)
+            if pull_code != 0 and "Already up to date" not in pull_out and "nothing" not in pull_err:
+                if "conflict" in (pull_out + " " + pull_err).lower():
+                    resolved = handle_conflicts(path, conflict_type="rebase")
+                    if not resolved:
+                        git.run_git(["checkout", temp_branch], cwd=path)
+                        git.run_git(["branch", "-D", temp_branch], cwd=path)
+                        return
+                else:
+                    warn(f"Note during sync: {pull_err or pull_out}")
+            
+            # Merge temp_branch into target_main
+            console.print(f"  [dim]Merging your changes into '{target_main}'...[/dim]")
+            merge_out, merge_err, merge_code = spinner(f"Merging changes into {target_main}", git.run_git, ["merge", temp_branch], cwd=path)
+            if merge_code != 0:
+                if "conflict" in (merge_out + " " + merge_err).lower():
+                    resolved = handle_conflicts(path, conflict_type="merge")
+                    if not resolved:
+                        git.run_git(["merge", "--abort"], cwd=path)
+                        git.run_git(["checkout", temp_branch], cwd=path)
+                        git.run_git(["branch", "-D", temp_branch], cwd=path)
+                        return
+                else:
+                    err(f"Merge failed:\n{merge_err}")
+                    git.run_git(["checkout", temp_branch], cwd=path)
+                    git.run_git(["branch", "-D", temp_branch], cwd=path)
+                    return
+            
+            branch = target_main
+            first_push = False
+            
+            # Clean up the temporary branch
+            git.run_git(["branch", "-D", temp_branch], cwd=path)
+            
+        else:
+            # CREATE A NEW BRANCH AND PUSH
+            import re
+            suggested = final_msg.lower()
+            suggested = re.sub(r'^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]+\))?:', '', suggested)
+            suggested = re.sub(r'[^a-z0-9]+', '-', suggested)
+            suggested = suggested.strip('-')
+            suggested = '-'.join(suggested.split('-')[:4])
+            if not suggested:
+                suggested = "new-feature"
+                
+            console.print(f"  [dim]Suggested branch name: {suggested}[/dim]")
+            new_branch = _pick("Enter new branch name", default=suggested)
+            if not new_branch:
+                new_branch = suggested
+                
+            out, errmsg, code = spinner(f"Creating and switching to branch '{new_branch}'", git.run_git, ["checkout", "-b", new_branch], cwd=path)
+            if code != 0:
+                err(f"Could not create branch '{new_branch}':\n{errmsg}")
+                return
+                
+            branch = new_branch
+            first_push = True
+            
+    else:
+        # Prompt user whether to push to the current branch or create a new branch
+        console.print(f"  [bold white]Where would you like to push your changes?[/bold white]\n")
+        push_options = [
+            f"Push to current branch '{branch}'",
+            "Create a new branch and push"
+        ]
+        choice = _sub_menu("Push Options", push_options)
+        
+        if choice is None:
+            warn("Operation cancelled.")
+            return
+            
+        if choice == 1:
+            # CREATE A NEW BRANCH AND PUSH
+            import re
+            suggested = final_msg.lower()
+            suggested = re.sub(r'^(feat|fix|chore|docs|style|refactor|perf|test|build|ci)(\([^)]+\))?:', '', suggested)
+            suggested = re.sub(r'[^a-z0-9]+', '-', suggested)
+            suggested = suggested.strip('-')
+            suggested = '-'.join(suggested.split('-')[:4])
+            if not suggested:
+                suggested = "new-feature"
+                
+            console.print(f"  [dim]Suggested branch name: {suggested}[/dim]")
+            new_branch = _pick("Enter new branch name", default=suggested)
+            if not new_branch:
+                new_branch = suggested
+                
+            out, errmsg, code = spinner(f"Creating and switching to branch '{new_branch}'", git.run_git, ["checkout", "-b", new_branch], cwd=path)
+            if code != 0:
+                err(f"Could not create branch '{new_branch}':\n{errmsg}")
+                return
+                
+            branch = new_branch
+            first_push = True
+        else:
+            if not first_push and git.has_commits(path):
+                console.print(f"  [dim]Pulling remote changes on branch '{branch}' first (safe push)...[/dim]")
+                pull_out, pull_err, pull_code = spinner("Syncing with GitHub", git.pull_rebase, path)
+                if pull_code != 0 and "Already up to date" not in pull_out and "nothing" not in pull_err:
+                    if "conflict" in (pull_out + " " + pull_err).lower():
+                        resolved = handle_conflicts(path, conflict_type="rebase")
+                        if not resolved:
+                            return
+                    else:
+                        warn(f"Note from Git: {pull_err or pull_out}")
+
     cmd = f"git push -u origin {branch}" if first_push else "git push"
     step_panel(5, TOTAL, f"Pushing to GitHub  [{branch}]", cmd,
                "After this, your code lives online!")
 
     teach_panel("'Pushing' is like uploading your save file to the cloud.")
-
-    if not first_push and git.has_commits(path):
-        console.print("  [dim]Pulling remote changes first (safe push)...[/dim]")
-        pull_out, pull_err, pull_code = spinner("Syncing with GitHub", git.pull_rebase, path)
-        if pull_code != 0 and "Already up to date" not in pull_out and "nothing" not in pull_err:
-            warn(f"Note from Git: {pull_err}")
-
+    
     out, errmsg, code = spinner(f"Pushing to GitHub ({branch})", git.push, path, branch, first_push)
     if code != 0:
         combined = (out + " " + errmsg).lower()
@@ -384,6 +663,66 @@ def flow_push():
     ok(f"Push complete!  Branch: {branch}  •  Commits: {commit_count}  •  Tree: {'clean' if tree_clean else 'has changes'}")
     if log_out:
         info_box("Recent Commits", log_out)
+        
+    if branch not in ("main", "master"):
+        console.print("\n  [bold white]What would you like to do with your new branch next?[/bold white]\n")
+        post_push_options = [
+            "Create a Pull Request / Merge Request on GitHub",
+            "Merge this branch into 'main' locally",
+            "Do nothing (I'm done!)"
+        ]
+        pp_choice = _sub_menu("Post-Push Actions", post_push_options)
+        
+        if pp_choice == 0:
+            remote_info, _, _ = git.get_remote(path)
+            import re
+            match = re.search(r'https://github\.com/[^/\s]+/[^/\s\.]+', remote_info)
+            if match:
+                github_url = match.group(0)
+                pr_url = f"{github_url}/pull/new/{branch}"
+                console.print(f"\n  [bold cyan]Opening browser to create your Pull Request:[/bold cyan]")
+                console.print(f"  [link={pr_url}]{pr_url}[/link]\n")
+                try:
+                    import webbrowser
+                    webbrowser.open(pr_url)
+                except Exception:
+                    pass
+            else:
+                warn("Could not parse GitHub repository URL to create a Pull Request link.")
+                
+        elif pp_choice == 1:
+            local_branches = git.get_local_branches(path)
+            target_main = "main" if "main" in local_branches else ("master" if "master" in local_branches else "main")
+            
+            console.print(f"  [dim]Switching to branch '{target_main}'...[/dim]")
+            out, errmsg, code = spinner(f"Switching to {target_main}", git.run_git, ["checkout", target_main], cwd=path)
+            if code != 0:
+                console.print(f"  [dim]Branch '{target_main}' not found locally. Creating it...[/dim]")
+                out, errmsg, code = spinner(f"Creating branch {target_main}", git.run_git, ["checkout", "-b", target_main], cwd=path)
+                
+            if code == 0:
+                console.print(f"  [dim]Pulling latest changes on '{target_main}'...[/dim]")
+                spinner(f"Syncing {target_main} with GitHub", git.pull_rebase, path)
+                
+                console.print(f"  [dim]Merging '{branch}' into '{target_main}'...[/dim]")
+                merge_out, merge_err, merge_code = spinner(f"Merging {branch} into {target_main}", git.run_git, ["merge", branch], cwd=path)
+                
+                if merge_code != 0:
+                    if "conflict" in (merge_out + " " + merge_err).lower():
+                        resolved = handle_conflicts(path, conflict_type="merge")
+                        if resolved:
+                            console.print(f"  [dim]Pushing merged '{target_main}' to GitHub...[/dim]")
+                            spinner(f"Pushing {target_main}", git.push, path, target_main, False)
+                    else:
+                        err(f"Merge failed:\n{merge_err}")
+                else:
+                    ok(f"Merged '{branch}' into '{target_main}' successfully!")
+                    console.print(f"  [dim]Pushing merged '{target_main}' to GitHub...[/dim]")
+                    push_out, push_err, push_code = spinner(f"Pushing {target_main}", git.push, path, target_main, False)
+                    if push_code == 0:
+                        ok(f"Successfully pushed '{target_main}' to remote!")
+                    else:
+                        err(f"Push failed:\n{push_err}")
 
 
 # ══════════════════════════════════════════════════════════════════════════
