@@ -21,7 +21,8 @@ body {
   margin: 0;
   font-family: "Space Grotesk", system-ui, sans-serif;
   color: var(--ink);
-  background: radial-gradient(1200px 800px at 80% -10%, #0b403b 0%, transparent 55%),
+  background:
+    radial-gradient(1200px 800px at 80% -10%, #0b403b 0%, transparent 55%),
     radial-gradient(1000px 700px at 10% 0%, #0f1b3d 0%, transparent 50%),
     var(--bg);
   min-height: 100vh;
@@ -38,7 +39,8 @@ body {
 .grid {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
     linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
   background-size: 80px 80px;
   opacity: 0.2;
@@ -150,7 +152,9 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .btn.primary {
@@ -256,7 +260,9 @@ body {
 }
 
 .mono {
-  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-family:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, "Liberation Mono",
+    monospace;
   color: var(--accent-2);
 }
 

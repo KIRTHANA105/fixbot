@@ -6,8 +6,10 @@ const installCommand = "installer\\install.cmd";
 copyButton.addEventListener("click", async () => {
   try {
     await navigator.clipboard.writeText(installCommand);
-    note.textContent = "Copied. Run it in an elevated CMD to install Fixbot.";
+    note.textContent =
+      "Copied. After download, run it in an elevated CMD to install Fixbot.";
   } catch (error) {
-    note.textContent = "Copy failed. Manually run: installer\\install.cmd";
+    note.textContent =
+      "Copy failed. Manually run after download: installer\\install.cmd";
   }
 });
