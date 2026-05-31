@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fixbot Installer</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="bg">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="grid"></div>
+    </div>
+
+    <header class="nav">
+      <div class="logo">>_ Fixbot</div>
+      <nav class="links">
+        <a href="#features">Features</a>
+        <a href="#install">Install</a>
+        <a
+          href="https://github.com/dineshkumarAS-creator/fixbot-v2"
+          target="_blank"
+          rel="noreferrer"
+          >GitHub</a
+        >
+      </nav>
+    </header>
+
+    <main class="hero">
+      <div class="tag">v4.0 is now live</div>
+      <h1>Autonomous Support Engineer for Windows</h1>
+      <p>
+        Fixbot diagnoses your system, fixes locked files, optimizes storage, and
+        resolves issues in real time. This installer sets up Fixbot and creates
+        an Admin shortcut on the desktop.
+      </p>
+      <div class="cta">
+        <a
+          class="btn primary"
+          href="https://github.com/KIRTHANA105/fixbot/archive/refs/tags/fixbot.zip"
+        >
+          Download Fixbot
+        </a>
+        <button class="btn ghost" id="copyCmd">Copy Install Command</button>
+      </div>
+      <div class="note" id="note">
+        After download, extract the ZIP and run from an elevated CMD:
+        <span class="mono">installer\install.cmd</span>
+      </div>
+    </main>
+
+    <section class="section" id="features">
+      <h2>What gets installed</h2>
+      <div class="cards">
+        <div class="card">
+          <h3>Admin Launcher</h3>
+          <p>
+            Creates a desktop shortcut that always opens Fixbot as
+            Administrator.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Fixbot Command</h3>
+          <p>
+            Adds a <span class="mono">fixbot</span> command to PATH for admin
+            CMD use.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Program Files Install</h3>
+          <p>
+            Copies the Fixbot folder into
+            <span class="mono">Program Files\Fixbot</span>.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Local Reports</h3>
+          <p>Stores Fixbot reports and memory inside the install folder.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="install">
+      <h2>After install</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <div class="step-body">
+            <h4>Open Fixbot (Admin)</h4>
+            <p>
+              Use the desktop shortcut:
+              <span class="mono">Fixbot (Admin)</span>.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <div class="step-body">
+            <h4>Use Admin CMD</h4>
+            <p>
+              In any elevated CMD, run: <span class="mono">fixbot</span> or
+              <span class="mono">start fixbot</span>.
+            </p>
+          </div>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <div class="step-body">
+            <h4>Run a scan</h4>
+            <p>
+              Type <span class="mono">scan</span> to get a full system report.
+            </p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="footer">
+      <span>Fixbot installer UI</span>
+      <span class="dot">•</span>
+      <span>Windows 10/11</span>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+.env
+sysdoc/.env
+__pycache__/
+*.pyc
+memory/
+reports/
+.idea/
+.vscode/
